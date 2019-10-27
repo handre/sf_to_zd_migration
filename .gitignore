@@ -1,0 +1,7 @@
+.vscode
+__pycache__
+credentials.json
+*.pickle
+logs/*
+helpers.py
+migration_plan.json

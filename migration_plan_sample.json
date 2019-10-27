@@ -1,0 +1,306 @@
+{
+    "zendesk": {
+        "url": "https://any-helpcenter.zendesk.com/api/v2",
+        "user": "email@company.com",
+        "password": "P455W0RD"
+    },
+    
+    "salesforce": {
+        "grant_type": "password",
+        "client_id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "client_secret": "0000000000000000000000000000000000000000000000000000000000000000",
+        "username": "email@company",
+        "password": "P455W0RDT0K3N",
+        "cookie_sid":"0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "cookie_domain":"c.xxxx.content.force.com"
+    },
+    "migration_items": [
+        {
+            "type": "migration_object",
+            "sf_object": "Account",
+            "zd_object": "organizations",
+            "force_download": true,
+            "skip": false,
+            "after_download": [
+                "helpers.build_orgs_hierarchy()"
+            ],
+            "sf_fields": [
+                "Id",
+                "Name",
+                "Description"
+            ],
+            "sf_conditions": [],
+            "fields_mapping": [
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "name"
+                    },
+                    "value": "'SF - '+ Name",
+                    "type": "sf_field"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "external_id"
+                    },
+                    "value": "Id",
+                    "type": "sf_field"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "notes"
+                    },
+                    "value": "Description",
+                    "type": "sf_field"
+                }
+            ]
+        },
+        {
+            "type": "migration_object",
+            "sf_object": "User",
+            "zd_object": "users",
+            "force_download": true,
+            "bulk_create_or_update": true,
+            "skip": false,
+            "sf_conditions": [],
+            "sf_fields": [
+                "Id",
+                "AccountId",
+                "Name",
+                "Phone",
+                "Email"
+            ],
+            "fields_mapping": [
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "external_id"
+                    },
+                    "value": "Id",
+                    "type": "sf_field"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "name"
+                    },
+                    "value": "Name",
+                    "type": "sf_field"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "email"
+                    },
+                    "value": "Email",
+                    "type": "sf_field"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "phone"
+                    },
+                    "value": "Phone",
+                    "type": "sf_field"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "organization_id"
+                    },
+                    "value": "AccountId",
+                    "type": "mapping",
+                    "source": "Account",
+                    "fallback_value": 100000000000
+                }
+            ]
+        },
+        {
+            "type": "script",
+            "skip": false,
+            "script": "helpers.create_users_membership_payload(env)"
+        },
+        {
+            "type": "migration_object",
+            "skip": false,
+            "zd_object": "organization_memberships",
+            "file": "migration_data/User/org_membership.json",
+            "create_mapping": false
+        },
+        {
+            "type": "migration_object",
+            "sf_object": "Case",
+            "zd_object": "tickets",
+            "zd_custom_endpoint": "imports/tickets",
+            "upsert": false,
+            "force_download": true,
+            "skip": false,
+            "limit": 1000,
+            "after_download": [
+                "helpers.download_cases_attachments(self)"
+            ],
+            "sf_conditions": [
+                "ClosedDate >= 2019-07-01T00:00:00Z and ClosedDate < 2019-10-21T00:00:00Z"
+            ],
+            "sf_fields": [
+                "Id",
+                "AccountId",
+                "CreatedDate",
+                "CreatedById",
+                "CreatedBy.Name",
+                "CreatedBy.Email",
+                "ContactId",
+                "Contact.Name",
+                "Contact.Email",
+                "Owner.Email",
+                "Status",
+                "Priority",
+                "ClosedDate",
+                "Subject",
+                "Type",
+                {
+                    "sf_object": "CaseComment",
+                    "sf_fields": [
+                        "Id",
+                        "CreatedById",
+                        "CreatedDate",
+                        "CommentBody",
+                        "IsPublished"
+                    ],
+                    "sf_conditions": [
+                        "f'''ParentId='{row[\"Id\"]}' '''"
+                    ]
+                },
+                {
+                    "sf_object": "Attachment",
+                    "sf_fields": [
+                        "Id",
+                        "Name",
+                        "IsPrivate",
+                        "ContentType",
+                        "BodyLength",
+                        "CreatedById"
+                    ],
+                    "sf_conditions": [
+                        "f'''ParentId='{row[\"Id\"]}' '''"
+                    ]
+                }
+            ],
+            "fields_mapping": [
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "external_id"
+                    },
+                    "value": "Id",
+                    "type": "sf_field"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "organization_id"
+                    },
+                    "value": "AccountId",
+                    "type": "mapping",
+                    "source": "Account",
+                    "fallback_value": 10000000000
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "requester"
+                    },
+                    "value": "{'name':Contact_Name, 'email': Contact_Email} if Contact_Name else {'name':CreatedBy_Name, 'email': CreatedBy_Email}",
+                    "type": "sf_field"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "submitter_id"
+                    },
+                    "value": 10000000000
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "tags"
+                    },
+                    "value": [
+                        "any_tag"
+                    ]
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "assignee_id"
+                    },
+                    "value": 10000000000
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "brand_id"
+                    },
+                    "value": 100000000000,
+                    "_note": "any annotation"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "ticket_form_id"
+                    },
+                    "value": 300000000000
+                },
+                {
+                    "field": {
+                        "type": "custom_fields",
+                        "key": 1000000000000,
+                        "note": "Name of the custom field"
+                    },
+                    "value": "any custom value"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "created_at"
+                    },
+                    "value": "helpers.date_to_str(helpers.date_from_str(CreatedDate))",
+                    "type": "sf_field"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "solved_at"
+                    },
+                    "value": "helpers.date_to_str(helpers.date_from_str(ClosedDate))",
+                    "type": "sf_field"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "status"
+                    },
+                    "value": "closed"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "subject"
+                    },
+                    "value": "Subject",
+                    "type": "sf_field"
+                },
+                {
+                    "field": {
+                        "type": "standard",
+                        "key": "comments"
+                    },
+                    "value": "helpers.create_comments_payload(self,**locals())",
+                    "type": "sf_field"
+                }
+            ]
+        }
+    ]
+}
