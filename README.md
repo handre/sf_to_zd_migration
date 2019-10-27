@@ -96,6 +96,7 @@ This type represents a mapping between a Salesforce and a Zendesk object.
 |limit| no | `integer`| Limit result returned by Salesforce. Default: Retrieve all data.
 |bulk_create_or_update|no|`boolean`| Whether Zendesk endpoint accepts create/update (upsert operation). Default: `false`.
 |upsert|no|`boolean`|Whether to mimic upsert for Zendesk endpoints not supporting such operation. Default: `true`
+|file|no|`string`|If you have a json in zendesk format for the object you can import data from it, then you can ignore all `sf_*` keys.
 
 ##### `fields_mapping`
 |key| Mandatory| Type| Description|
@@ -121,3 +122,6 @@ Use `helpers.py` to add custom functions that will become available to transform
 
 Objects will be migrated in the order they appear in `migration_plan.json`. For every object pulled from Salesforce a folder is created under `migration_data` containing a `csv` and a `json` file with the downloaded data.
 After migration is done, a mapping file will be created with the related ids from Zendesk in the same folder.
+
+## Errors
+Errors on importing will be stored in `_log` key in each failed object and then saved to `errors.json`
