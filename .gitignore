@@ -5,3 +5,4 @@ credentials.json
 logs/*
 helpers.py
 migration_plan.json
+migration_data/
