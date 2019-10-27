@@ -20,7 +20,7 @@ Features:
 		},
 	"salesforce": {
 		"grant_type": "password",
-		"client_id": <salesforce_client_id>",
+		"client_id": <salesforce_client_id>,
 		"client_secret": <salesforce_client_secret>,
 		"username": <salesforce_username>,
 		"password": <salesforce_password>,
