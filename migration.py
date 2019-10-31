@@ -46,13 +46,14 @@ class MigrationItem():
 
         self.force_download = kwargs.get('force_download', True)
 
+        self.batch_folder = f'{self.__data_folder__}/{self.sf_object or self.zd_object}/batches'
         self.export_file = f'{self.__data_folder__}/{self.sf_object}/data.csv'
         self.data_file = f'{self.__data_folder__}/{self.sf_object}/data.json'
         self.id_mapping_file = f'{self.__data_folder__}/{self.sf_object}/{self.env_mode}-mapping.json'
         self.errors_file = f'{self.__data_folder__}/{self.sf_object or self.zd_object}/errors.json'
 
     def __build_directory(self):
-        os.makedirs(f'{self.__data_folder__}/{self.sf_object or self.zd_object}', exist_ok=True)
+        os.makedirs(f'{self.__data_folder__}/{self.sf_object or self.zd_object}/batches', exist_ok=True)
 
     def __parse_sf_row(self, row, fields=None):
         parsed_row = {}
@@ -152,9 +153,9 @@ class MigrationItem():
     def _create_or_update_zd_obj(self, json):
         result = self._zd.post(
             f'/{self.zd_custom_endpoint or self.zd_object}/create_or_update_many.json', json=json, response_container='job_status')
-        status = result['status']
+        status = result['status'] if 'status' in result else 'error'
 
-        while status in ['queued', 'working']:
+        while status in ['queued', 'working','error']:
             job_url = result['url']
             result = self._zd.get(job_url, 'job_status')
             status = result['status']
@@ -270,23 +271,44 @@ class MigrationItem():
         
         self.log.info(f'Starting Migration of {self.zd_object} Object')
 
+        import_payload_file = f'migration_data/{self.sf_object}/import_payload.json'
+
         if self.sf_object:
             if self.force_download == True:
                 self.download_data()
-
-
-        payload_batches = self._create_batch_payload()
-        json.dump(payload_batches,open(f'migration_data/{self.sf_object}/import_payload.json','w+'))
+                payload_batches = self._create_batch_payload()
+                json.dump(payload_batches,open(import_payload_file,'w+'))
+    
+        if self.payload_file:
+            payload_batches = self._create_batch_payload()
+        else:
+            if os.path.exists(import_payload_file):
+               payload_batches = json.load(open(import_payload_file,'r'))
+            else:
+                raise BaseException('No data is downloaded yet.')
 
         obj_mapping = {}
-        failed_obj = {self.zd_object: []}
-        current_batch = 1
+        obj_error = {self.zd_object: []}
+        
         self.log.info(f'Uploading data to zendesk')
 
-        for batch in payload_batches:
+        for idx,batch in enumerate(payload_batches):
+            batch_mapping = {}
+            batch_error = {self.zd_object:[]}
+            batch_mapping_file = os.path.join(self.batch_folder,f'batch_success_{idx}.json')
+            batch_error_file = os.path.join(self.batch_folder,f'batch_error_{idx}.json')
+            
+            if os.path.exists(batch_mapping_file):
+                self.log.info(f'Skipped batch {idx}. Already processed.')
+                obj_mapping.update(json.load(open(batch_mapping_file,'r')))
+
+                if os.path.exists(batch_error_file):
+                    obj_error[self.zd_object].extend(json.load(open(batch_error_file,'r')))
+                continue 
+
             batch_success = len(batch[self.zd_object])
-            batch_failed = 0
-            self.log.info(f'\tBatch {current_batch} of {len(payload_batches)}')
+            
+            self.log.info(f'\tBatch {idx} of {len(payload_batches)}')
 
             if self.bulk_create_or_update == True:
                 value = batch
@@ -298,16 +320,16 @@ class MigrationItem():
                         id = result[i].get('id', None)
                         if id:
                             if self.create_mapping == True:
-                                obj_mapping.update(
+                                batch_mapping.update(
                                     {value[self.zd_object][i]['external_id']: id})
                             self.log.info(f"[{self.zd_object}][{key}] SalesForce Id: {value[self.zd_object][i]['external_id']}\tZendesk Id:{id}")
                         else:
                             if key != 'create':
-                                obj_mapping.update({value[self.zd_object][i]['external_id']: value[self.zd_object][i]['external_id']})
+                                batch_mapping.update({value[self.zd_object][i]['external_id']: value[self.zd_object][i]['external_id']})
                             item = value[self.zd_object][i]
                             item.update({'_log': result[i]})
-                            failed_obj[self.zd_object].append(item)
-                            batch_failed += 1
+                            batch_error[self.zd_object].append(item)
+                            
             else:
                 if self.upsert:
                     mapping = self._get_mapping()
@@ -330,25 +352,32 @@ class MigrationItem():
                             id = result[i].get('id', None)
                             if id:
                                 if self.create_mapping == True:
-                                    obj_mapping.update(
+                                    batch_mapping.update(
                                         {value[self.zd_object][i]['external_id']: id})
                                     self.log.info(f"[{self.zd_object}][{key}] SalesForce Id: {value[self.zd_object][i]['external_id']}\tZendesk Id:{id}")
                             else:
                                 if key == 'update':
-                                    obj_mapping.update({value[self.zd_object][i]['external_id']: value[self.zd_object][i]['external_id']})
+                                    batch_mapping.update({value[self.zd_object][i]['external_id']: value[self.zd_object][i]['external_id']})
                                 item = value[self.zd_object][i]
                                 item.update({'_log': result[i]})
-                                failed_obj[self.zd_object].append(item)
-                                batch_failed += 1
-                        
-                    
+                                batch_error[self.zd_object].append(item)
                                 
-            current_batch += 1
+            batch_failed =  len(batch_error[self.zd_object])
             batch_success -= batch_failed
+            
+            if batch_success >0:
+                obj_mapping.update(batch_mapping)
+                json.dump(batch_mapping,open(batch_mapping_file,'w+'))     
+                
+            if batch_failed >0:
+                obj_error[self.zd_object].extend(batch_error[self.zd_object])
+                json.dump(batch_error,open(batch_error_file,'w+'))       
+        
             self.log.info(f'\tBatch completed.')
             self.log.info(f'\t\tSuccess:\t {batch_success}')
             self.log.info(f'\t\tFailed :\t {batch_failed}. Check Error Log file.')
+        
         self.log.info(f'All batches completed.')
         if self.create_mapping == True:
             json.dump(obj_mapping, open(self.id_mapping_file, 'w+'))
-        json.dump(failed_obj, open(self.errors_file, 'w+'))
+        json.dump(obj_error, open(self.errors_file, 'w+'))

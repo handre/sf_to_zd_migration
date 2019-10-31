@@ -6,6 +6,7 @@ from salesforce import SalesForce
 from zendesk import Zendesk
 from migration import MigrationItem
 from log_helper import get_logger
+import helpers
 
 log = get_logger('Main')
 
@@ -28,5 +29,5 @@ if __name__ == "__main__":
                         log.critical(err)
                         raise err
             elif item['type'] == 'script':
-                eval(item['script'])
+                eval(item['script'],{"helpers":helpers, "env":ENV})
 
