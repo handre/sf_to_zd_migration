@@ -51,6 +51,19 @@ class MigrationItem():
         self.data_file = f'{self.__data_folder__}/{self.sf_object}/data.json'
         self.id_mapping_file = f'{self.__data_folder__}/{self.sf_object}/{self.env_mode}-mapping.json'
         self.errors_file = f'{self.__data_folder__}/{self.sf_object or self.zd_object}/errors.json'
+        self.mapping_errors_file = f'{self.__data_folder__}/{self.sf_object or self.zd_object}/mapping-errors.json'
+
+    def log_mapping_error(self, obj, source, key):
+        json_payload = [{'object':obj, 'source':source, 'key':key }]
+
+        if not os.path.exists(self.mapping_errors_file):    
+            json.dump(json_payload, open(self.mapping_errors_file, 'w+'))
+        else:
+            log_json =  json.load(open(self.mapping_errors_file,'r'))
+            log_json.extend(json_payload)
+            json.dump(log_json, open(self.mapping_errors_file, 'w+'))
+
+
 
     def __build_directory(self):
         os.makedirs(f'{self.__data_folder__}/{self.sf_object or self.zd_object}/batches', exist_ok=True)
@@ -198,6 +211,7 @@ class MigrationItem():
                             else:
                                 fallback_value = map_item.get('fallback_value',None)
                                 field_value = fallback_value
+                                self.log_mapping_error(fields, mapping_source, mapping_key)
                                 self.log.warning(
                                     f'No Mapping found for {field_key} in {mapping_source}. Fallbak value is used instead')
                     else:
