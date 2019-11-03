@@ -27,4 +27,4 @@ def undo_last_ticket_migration():
     print('Scheduled for deleting')
 
 if __name__ == "__main__":
-    undo_last_ticket_migration()
+    undo_last_ticket_migration('jive_migrated_ticket')

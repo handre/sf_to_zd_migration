@@ -53,8 +53,8 @@ class MigrationItem():
         self.errors_file = f'{self.__data_folder__}/{self.sf_object or self.zd_object}/errors.json'
         self.mapping_errors_file = f'{self.__data_folder__}/{self.sf_object or self.zd_object}/mapping-errors.json'
 
-    def log_mapping_error(self, obj, source, key):
-        json_payload = [{'object':obj, 'source':source, 'key':key }]
+    def log_mapping_error(self, obj, source, key, value):
+        json_payload = [{'object':obj, 'source':source, 'key':key,'value':value }]
 
         if not os.path.exists(self.mapping_errors_file):    
             json.dump(json_payload, open(self.mapping_errors_file, 'w+'))
@@ -123,8 +123,6 @@ class MigrationItem():
         json.dump(data,open(self.data_file,'w+'))
         self.log.info('Done.')
 
-        self.on_after_download()
-
     def on_after_download(self):
         for func in self.after_download:
             self.log.info(f'Evaluating function after download {func}')
@@ -183,7 +181,10 @@ class MigrationItem():
         data = self.get_data()
         total = len(data)
 
-        if self.sf_object:        
+        if self.sf_object:
+            if os.path.exists(os.path.join(self.__data_folder__, self.sf_object,'payload.json')):
+                return json.load(open(os.path.join(self.__data_folder__, self.sf_object,'payload.json'),'r'))
+
             payload = {self.zd_object: []}
             
             for idx, fields in enumerate(data):
@@ -206,12 +207,13 @@ class MigrationItem():
                                 field_value = mapping.get(
                                     fields[mapping_key], None)
                                 if field_value is None:
+                                    self.log_mapping_error(fields, mapping_source, mapping_key,fields[mapping_key])
                                     self.log.warning(
                                         f'No Mapping found for {field_key} in {mapping_source} |\tkey:{fields[mapping_key]}')
                             else:
                                 fallback_value = map_item.get('fallback_value',None)
                                 field_value = fallback_value
-                                self.log_mapping_error(fields, mapping_source, mapping_key)
+                                self.log_mapping_error(fields, mapping_source, mapping_key,fields[mapping_key])
                                 self.log.warning(
                                     f'No Mapping found for {field_key} in {mapping_source}. Fallbak value is used instead')
                     else:
@@ -229,7 +231,7 @@ class MigrationItem():
                 payload[self.zd_object].append(mapped)
 
             self.log.info(f'Done.')
-
+            json.dump(payload,open(os.path.join(self.__data_folder__, self.sf_object,'payload.json'),'w+'))
             return payload
         return data
 
@@ -242,6 +244,10 @@ class MigrationItem():
         for i in range(slices):
             batches.append(
                 {self.zd_object: payload[self.zd_object][i*slice_size:slice_size + i*slice_size]})
+            current_batch = batches[i][self.zd_object]
+            for item in current_batch :
+                if item.get('tags',None):
+                    item['tags'].append(f'batch_{i}')
         return batches
 
     def _create_batch_list(self, items):
@@ -290,22 +296,23 @@ class MigrationItem():
         if self.sf_object:
             if self.force_download == True:
                 self.download_data()
-                payload_batches = self._create_batch_payload()
-                json.dump(payload_batches,open(import_payload_file,'w+'))
-    
+        
+        self.on_after_download()
+        
         if self.payload_file:
             payload_batches = self._create_batch_payload()
         else:
             if os.path.exists(import_payload_file):
-               payload_batches = json.load(open(import_payload_file,'r'))
+                payload_batches = json.load(open(import_payload_file,'r'))
             else:
-                raise BaseException('No data is downloaded yet.')
+                payload_batches = self._create_batch_payload()
+                json.dump(payload_batches,open(import_payload_file,'w+'))
 
         obj_mapping = {}
         obj_error = {self.zd_object: []}
         
         self.log.info(f'Uploading data to zendesk')
-
+ 
         for idx,batch in enumerate(payload_batches):
             batch_mapping = {}
             batch_error = {self.zd_object:[]}
