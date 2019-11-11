@@ -20,7 +20,7 @@ class Zendesk():
                 result = r.json()
                 next_url = result.get('next_page',None)
                 data = result[response_container] if response_container else result
-
+                #yield data
                 if type(data) == list:
                     items += data
                 elif next_url is None and type(data) == dict and len(items) == 0:
@@ -28,8 +28,9 @@ class Zendesk():
                 else:
                     items.append(data)
 
+
             if r.status_code == 429:
-                wait_for = r.headers['Retry-After']
+                wait_for =int(r.headers['Retry-After'])
                 time.sleep(wait_for)
 
         return items
@@ -42,10 +43,10 @@ class Zendesk():
             return r.json()['upload']
         return {'status_code':r.status_code}
         
-    def post(self,path, json, response_container=None):
+    def post(self,path, data, response_container=None):
         url = self.url + path
 
-        r = requests.post(url, auth=self._auth, json=json)
+        r = requests.post(url,auth=self._auth, json=data)
 
         if r.status_code in [200, 201]:
             return r.json().get(response_container, None) if response_container else r

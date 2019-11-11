@@ -120,7 +120,7 @@ class MigrationItem():
                                 parsed_row[join_field['sf_object']].append( self.__parse_sf_row(join_row,join_field['sf_fields']))
                     data.append(parsed_row)
                     csv_writer.writerow(parsed_row)
-        json.dump(data,open(self.data_file,'w+'))
+        json.dump(data,open(self.data_file,'w+', encoding='utf-8-sig'))
         self.log.info('Done.')
 
     def on_after_download(self):
@@ -144,7 +144,7 @@ class MigrationItem():
 
     def _create_zd_obj(self, json):
         result = self._zd.post(
-            f'/{self.zd_custom_endpoint or self.zd_object}/create_many.json', json=json, response_container='job_status')
+            f'/{self.zd_custom_endpoint or self.zd_object}/create_many.json', data=json, response_container='job_status')
         status = result['status']
 
         while status in ['queued', 'working']:
@@ -163,7 +163,7 @@ class MigrationItem():
 
     def _create_or_update_zd_obj(self, json):
         result = self._zd.post(
-            f'/{self.zd_custom_endpoint or self.zd_object}/create_or_update_many.json', json=json, response_container='job_status')
+            f'/{self.zd_custom_endpoint or self.zd_object}/create_or_update_many.json', data=json, response_container='job_status')
         status = result['status'] if 'status' in result else 'error'
 
         while status in ['queued', 'working','error']:
@@ -243,11 +243,7 @@ class MigrationItem():
         slice_size = 100
         for i in range(slices):
             batches.append(
-                {self.zd_object: payload[self.zd_object][i*slice_size:slice_size + i*slice_size]})
-            current_batch = batches[i][self.zd_object]
-            for item in current_batch :
-                if item.get('tags',None):
-                    item['tags'].append(f'batch_{i}')
+                {self.zd_object: payload[self.zd_object][i*slice_size:(i+1)*slice_size]})
         return batches
 
     def _create_batch_list(self, items):
@@ -303,10 +299,10 @@ class MigrationItem():
             payload_batches = self._create_batch_payload()
         else:
             if os.path.exists(import_payload_file):
-                payload_batches = json.load(open(import_payload_file,'r'))
+                payload_batches = json.load(open(import_payload_file,'r', encoding='utf-8-sig' ))
             else:
                 payload_batches = self._create_batch_payload()
-                json.dump(payload_batches,open(import_payload_file,'w+'))
+                json.dump(payload_batches,open(import_payload_file,'w+' ))
 
         obj_mapping = {}
         obj_error = {self.zd_object: []}
@@ -321,16 +317,19 @@ class MigrationItem():
             
             if os.path.exists(batch_mapping_file):
                 self.log.info(f'Skipped batch {idx}. Already processed.')
-                obj_mapping.update(json.load(open(batch_mapping_file,'r')))
+                obj_mapping.update(json.load(open(batch_mapping_file,'r', encoding='utf-8-sig')))
 
                 if os.path.exists(batch_error_file):
-                    obj_error[self.zd_object].extend(json.load(open(batch_error_file,'r')))
+                    obj_error[self.zd_object].extend(json.load(open(batch_error_file,'r',encoding='utf-8-sig')))
                 continue 
-
+            
+            
             batch_success = len(batch[self.zd_object])
             
             self.log.info(f'\tBatch {idx} of {len(payload_batches)}')
 
+            json.dump({},open(batch_mapping_file,'w+'))     
+            
             if self.bulk_create_or_update == True:
                 value = batch
                 key = 'bulk_create_update'

@@ -22,7 +22,7 @@ class SalesForce():
             self.instance_url = r.json().get("instance_url",None)
             
     def get_image(self,url):   
-        response = self.session.get(url)
+        response = self.session.get(url, timeout=(2,5))
         return response.content
 
     def _api_call(self, action, parameters = {}, method = 'get', data = {}):
