@@ -18,11 +18,13 @@ class SalesForce():
             self._access_token = r.json().get("access_token",None)
             self.session.headers['Authorization'] = f'Bearer {self._access_token}'
             self.session.cookies.set(name='sid',value=kwargs['cookie_sid'], domain=kwargs['cookie_domain'])
-            
+            self.session.cookies.set(name='atlassian.xsrf.token', value='B2YH-NCM1-ID0V-D60M_8284e4e214fc14e59ad9ea5bbff670c9b3d20255_lin', domain='jira.devfactory.com')
+            self.session.cookies.set(name='JSESSIONID', value='E70BC00650914C5DE7986E27DFCE0F47.jira-prod-node-4', domain='jira.devfactory.com')            
+            self.session.cookies.set(name='route', value='1574861615.812.134449.885484', domain='jira.devfactory.com')                        
             self.instance_url = r.json().get("instance_url",None)
             
     def get_image(self,url):   
-        response = self.session.get(url, timeout=(2,5))
+        response = self.session.get(url, timeout=(2,25))
         return response.content
 
     def _api_call(self, action, parameters = {}, method = 'get', data = {}):

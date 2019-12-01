@@ -143,21 +143,31 @@ class MigrationItem():
         return result.get('results', None)
 
     def _create_zd_obj(self, json):
-        result = self._zd.post(
-            f'/{self.zd_custom_endpoint or self.zd_object}/create_many.json', data=json, response_container='job_status')
-        status = result['status']
 
-        while status in ['queued', 'working']:
-            job_url = result['url']
-            result = self._zd.get(job_url, 'job_status')
+        result = None
+        while result is None:
+            result = self._zd.post(
+            f'/{self.zd_custom_endpoint or self.zd_object}/create_many.json', data=json, response_container='job_status')
+
+            if 'status_code'in result and result.status_code == 429:
+                wait_time =int(result.headers['Retry-After'])
+                result = None
+                time.sleep(wait_time)
+                continue
+
             status = result['status']
-            if status in ['queued', 'working']:
-                message = result.get('message',None)
-                if message:
-                    self.log.info(message)
-                else:
-                    self.log.info('Waiting reponse...')
-                time.sleep(10)
+
+            while status in ['queued', 'working']:
+                job_url = result['url']
+                result = self._zd.get(job_url, 'job_status')
+                status = result['status']
+                if status in ['queued', 'working']:
+                    message = result.get('message',None)
+                    if message:
+                        self.log.info(message)
+                    else:
+                        self.log.info('Waiting reponse...')
+                    time.sleep(10)
 
         return result.get('results', None)
 
@@ -292,8 +302,8 @@ class MigrationItem():
         if self.sf_object:
             if self.force_download == True:
                 self.download_data()
-        
-        self.on_after_download()
+                
+            self.on_after_download()
         
         if self.payload_file:
             payload_batches = self._create_batch_payload()
@@ -302,7 +312,7 @@ class MigrationItem():
                 payload_batches = json.load(open(import_payload_file,'r', encoding='utf-8-sig' ))
             else:
                 payload_batches = self._create_batch_payload()
-                json.dump(payload_batches,open(import_payload_file,'w+' ))
+                json.dump(payload_batches,open(import_payload_file,'w+',encoding='utf-8-sig' ))
 
         obj_mapping = {}
         obj_error = {self.zd_object: []}
