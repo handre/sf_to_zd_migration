@@ -37,11 +37,18 @@ class Zendesk():
     
     def upload_file(self, filename, data, token=None, inline=False):
         url = self.url + f'/uploads.json?filename={filename}{"&token="+token if token else ""}{"&inline=true" if inline else ""}'
-                
-        r = requests.post(url, auth=self._auth, headers={'Content-Type':'application/binary'},data=data)
-        if r.status_code == 201:
-            return r.json()['upload']
-        return {'status_code':r.status_code}
+        response = None
+        while response is None:        
+            response = requests.post(url, auth=self._auth, headers={'Content-Type':'application/binary'},data=data)
+            
+            if response.status_code == 201:
+                return response.json()['upload']
+            if response.status_code == 429:
+                wait_for =int(response.headers['Retry-After'])
+                response = None
+                time.sleep(wait_for)
+            else:
+                return {'status_code':response.status_code}
         
     def post(self,path, data, response_container=None):
         url = self.url + path
